@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sqlite3.h>
+#include <openssl/sha.h>
 #include "../data/db.h"
 
 // Authentication functions (auth.c)
