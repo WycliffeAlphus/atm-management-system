@@ -6,7 +6,7 @@
 #include <string.h>
 #include <sqlite3.h>
 #include <openssl/sha.h>
-#include <time.h>  // For dynamic date
+#include <time.h>  
 #ifdef _WIN32
 #include <windows.h>
 #else
