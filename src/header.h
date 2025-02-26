@@ -4,35 +4,38 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "sqlite3.h"
+#include <sqlite3.h>
 #include <openssl/sha.h>
+#include <time.h>  // For dynamic date
 #ifdef _WIN32
-#include <windows.h>  // For Sleep on Windows
+#include <windows.h>
 #else
-#include <unistd.h>   // For sleep on Unix-like systems
+#include <unistd.h>
 #endif
 #include "../data/db.h"
 
-// Clear the terminal screen
 #ifdef _WIN32
 #define CLEAR_SCREEN() system("cls")
+#define PAUSE_DISPLAY() Sleep(2000)
 #else
 #define CLEAR_SCREEN() system("clear")
-#endif
-
-// Pause display for 2 seconds
-#ifdef _WIN32
-#define PAUSE_DISPLAY() Sleep(2000)  // Sleep in milliseconds
-#else
-#define PAUSE_DISPLAY() sleep(2)     // sleep in seconds
+#define PAUSE_DISPLAY() sleep(2)
 #endif
 
 // Authentication functions (auth.c)
 int login_user(sqlite3 *db);
 void register_user(sqlite3 *db);
 
-// Account management functions (accounts.c)
+// Account menu function (accounts.c)
 void account_menu(sqlite3 *db, int user_id);
+
+// Account operations (account_ops.c)
 void create_account(sqlite3 *db, int user_id);
+void check_account_details(sqlite3 *db, int user_id);
+void update_account_info(sqlite3 *db, int user_id);
+void remove_account(sqlite3 *db, int user_id);
+void list_owned_accounts(sqlite3 *db, int user_id);
+void make_transaction(sqlite3 *db, int user_id);
+void transfer_ownership(sqlite3 *db, int user_id);
 
 #endif
