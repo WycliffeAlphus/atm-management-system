@@ -7,7 +7,7 @@ int main() {
     rc = sqlite3_open("data/atm.db", &db);
     if (rc != SQLITE_OK) {
         fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
-        PAUSE_DISPLAY(); 
+        PAUSE_DISPLAY();
         return 1;
     }
 
@@ -25,9 +25,20 @@ int main() {
         printf("1. Login\n");
         printf("2. Register\n");
         printf("3. Exit\n");
+        
         printf("Enter your choice: ");
-        scanf("%d", &choice);
-        getchar();
+        fflush(stdout); // Ensure prompt displays
+
+        // Check if scanf successfully read an integer
+        if (scanf("%d", &choice) != 1) {
+            // Invalid input (non-numeric), clear the buffer
+            while (getchar() != '\n'); // Consume remaining input
+            CLEAR_SCREEN();
+            printf("Invalid choice. Please enter a number.\n");
+            PAUSE_DISPLAY();
+            continue; // Skip switch, back to menu
+        }
+        getchar(); // Clear newline after valid number
 
         switch (choice) {
             case 1:
@@ -43,13 +54,13 @@ int main() {
             case 3:
                 CLEAR_SCREEN();
                 printf("Goodbye!\n");
-                PAUSE_DISPLAY(); 
+                PAUSE_DISPLAY();
                 sqlite3_close(db);
                 return 0;
             default:
                 CLEAR_SCREEN();
                 printf("Invalid choice. Please try again.\n");
-                PAUSE_DISPLAY(); 
+                PAUSE_DISPLAY();
                 break;
         }
     }
