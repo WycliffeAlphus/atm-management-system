@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -g
-LDFLAGS = -lsqlite3 -lcrypto  
-SRC = src/main.c src/auth.c src/accounts.c data/db.c
+LDFLAGS = -lcrypto 
+SRC = src/main.c src/auth.c src/accounts.c data/db.c src/sqlite3.c  
 OBJ = $(SRC:.c=.o)
 EXEC = atm
 
