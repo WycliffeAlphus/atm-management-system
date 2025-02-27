@@ -1,5 +1,6 @@
 #include "header.h"
 
+// register_user registers a new user
 void register_user(sqlite3 *db) {
     char name[50], password[50];
     unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -53,6 +54,8 @@ void register_user(sqlite3 *db) {
     sqlite3_finalize(stmt);
 }
 
+
+// login_user logs in a user
 int login_user(sqlite3 *db) {
     char name[50], password[50];
     unsigned char hash[SHA256_DIGEST_LENGTH];
