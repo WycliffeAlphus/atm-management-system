@@ -73,6 +73,13 @@ void create_account(sqlite3 *db, int user_id) {
     printf("Enter initial balance (in dollars): $");
     scanf("%lf", &balance);
 
+    if (scanf("%lf", &balance) != 1){
+        while (getchar() != '\n'); 
+        printf("Error: amount should not have letters.\n");
+        PAUSE_DISPLAY();
+        return;
+    }
+
     getchar();
 
     if (balance < 0) {
