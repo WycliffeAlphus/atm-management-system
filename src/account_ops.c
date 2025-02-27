@@ -1,6 +1,6 @@
 #include "header.h"
 
-// Helper function to check if account belongs to user
+// account_exists_and_owned checks if the account exists and is owned by the user
 static int account_exists_and_owned(sqlite3 *db, int user_id, int account_id) {
     sqlite3_stmt *stmt;
     const char *sql = "SELECT COUNT(*) FROM accounts WHERE user_id = ? AND account_id = ?;";
@@ -16,7 +16,7 @@ static int account_exists_and_owned(sqlite3 *db, int user_id, int account_id) {
     return exists;
 }
 
-
+// isValidAccountType checks if the account type is valid
 int isValidAccountType(const char *type) {
     const char *validTypes[] = {"current", "savings", "fixed01", "fixed02", "fixed03"};
     int numTypes = sizeof(validTypes) / sizeof(validTypes[0]);
@@ -29,6 +29,8 @@ int isValidAccountType(const char *type) {
     return 0; 
 }
 
+
+// create_account creates a new account for the user
 void create_account(sqlite3 *db, int user_id) {
     char country[50], phone[20], type[20], date_created[11];
     double balance;
@@ -133,6 +135,9 @@ void create_account(sqlite3 *db, int user_id) {
     }
     sqlite3_finalize(stmt);
 }
+
+
+// check_account_details displays the details of the account
 void check_account_details(sqlite3 *db, int user_id) {
     int account_id;
     sqlite3_stmt *stmt;
@@ -177,7 +182,7 @@ void check_account_details(sqlite3 *db, int user_id) {
 
         // Extract day from date_created (DD/MM/YYYY)
         int day;
-        sscanf(date, "%d/", &day); // Reads the day (first two chars before '/')
+        sscanf(date, "%d/", &day); 
 
         CLEAR_SCREEN();
         printf("=== Account Details ===\n");
@@ -209,6 +214,8 @@ void check_account_details(sqlite3 *db, int user_id) {
 
     sqlite3_finalize(stmt);
 }
+
+// update_account_info updates the account information
 void update_account_info(sqlite3 *db, int user_id) {
     int account_id, field_choice;
     char new_value[50];
@@ -286,6 +293,8 @@ void update_account_info(sqlite3 *db, int user_id) {
     sqlite3_finalize(stmt);
 }
 
+
+// remove_account deletes an account
 void remove_account(sqlite3 *db, int user_id) {
     int account_id;
     sqlite3_stmt *stmt;
@@ -335,6 +344,7 @@ void remove_account(sqlite3 *db, int user_id) {
     sqlite3_finalize(stmt);
 }
 
+//list_owned_accounts lists all the accounts owned by the user
 void list_owned_accounts(sqlite3 *db, int user_id) {
     sqlite3_stmt *stmt;
     int rc;
@@ -379,6 +389,8 @@ void list_owned_accounts(sqlite3 *db, int user_id) {
     getchar(); 
 }
 
+
+// make_transaction makes a deposit or withdrawal
 void make_transaction(sqlite3 *db, int user_id) {
     int account_id, type_choice;
     double amount, current_balance;
@@ -514,6 +526,8 @@ void make_transaction(sqlite3 *db, int user_id) {
     sqlite3_finalize(stmt);
 }
 
+
+// transfer_ownership transfers the account to another user
 void transfer_ownership(sqlite3 *db, int user_id) {
     int account_id;
     char new_owner[50];
