@@ -20,29 +20,74 @@ static int account_exists_and_owned(sqlite3 *db, int user_id, int account_id) {
 int isValidAccountType(const char *type) {
     const char *validTypes[] = {"current", "savings", "fixed01", "fixed02", "fixed03"};
     int numTypes = sizeof(validTypes) / sizeof(validTypes[0]);
-
     for (int i = 0; i < numTypes; i++) {
         if (strcmp(type, validTypes[i]) == 0) {
-            return 1; 
+            return 1;
         }
     }
-    return 0; 
+    return 0;
 }
 
+// isValidDate checks if the date is valid
+int isValidDate(const char *date) {
+    int day, month, year;
+    if (sscanf(date, "%d/%d/%d", &day, &month, &year) != 3) return 0;
+    if (year < 1900 || year > 2100) return 0;
+    if (month < 1 || month > 12) return 0;
+    if (day < 1 || day > 31) return 0;
+    if (month == 2) {
+        int isLeap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
+        if (day > 29 || (day == 29 && !isLeap)) return 0;
+    } else if (month == 4 || month == 6 || month == 9 || month == 11) {
+        if (day > 30) return 0;
+    }
+    return 1;
+}
 
-// create_account creates a new account for the user
+// create_account creates a new account
 void create_account(sqlite3 *db, int user_id) {
     char country[50], phone[20], type[20], date_created[11];
     double balance;
+    int account_id;
     sqlite3_stmt *stmt;
-    int rc, new_account_id;
-
-    time_t now = time(NULL);
-    struct tm *tm = localtime(&now);
-    strftime(date_created, sizeof(date_created), "%d/%m/%Y", tm);
+    int rc;
 
     CLEAR_SCREEN();
     printf("=== Create a New Account ===\n");
+
+    printf("Enter account number: ");
+    if (scanf("%d", &account_id) != 1) {
+        while (getchar() != '\n');
+        printf("Error: Account number must be an integer.\n");
+        PAUSE_DISPLAY();
+        return;
+    }
+    getchar();
+
+    const char *check_sql = "SELECT COUNT(*) FROM accounts WHERE account_id = ?;";
+    rc = sqlite3_prepare_v2(db, check_sql, -1, &stmt, 0);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Database error: %s\n", sqlite3_errmsg(db));
+        PAUSE_DISPLAY();
+        return;
+    }
+    sqlite3_bind_int(stmt, 1, account_id);
+    if (sqlite3_step(stmt) == SQLITE_ROW && sqlite3_column_int(stmt, 0) > 0) {
+        printf("Error: Account number %d already exists.\n", account_id);
+        sqlite3_finalize(stmt);
+        PAUSE_DISPLAY();
+        return;
+    }
+    sqlite3_finalize(stmt);
+
+    printf("Enter date created (dd/mm/yyyy): ");
+    fgets(date_created, sizeof(date_created), stdin);
+    date_created[strcspn(date_created, "\n")] = 0;
+    if (!isValidDate(date_created)) {
+        printf("Error: Invalid date format. Use dd/mm/yyyy.\n");
+        PAUSE_DISPLAY();
+        return;
+    }
 
     printf("Enter country: ");
     fgets(country, sizeof(country), stdin);
@@ -51,7 +96,6 @@ void create_account(sqlite3 *db, int user_id) {
     printf("Enter phone number: ");
     fgets(phone, sizeof(phone), stdin);
     phone[strcspn(phone, "\n")] = 0;
-
     for (int i = 0; phone[i] != '\0'; i++) {
         if (!isdigit(phone[i])) {
             printf("Error: Phone number must contain only digits.\n");
@@ -63,86 +107,53 @@ void create_account(sqlite3 *db, int user_id) {
     printf("Enter account type (current, savings, fixed01, fixed02, fixed03): ");
     fgets(type, sizeof(type), stdin);
     type[strcspn(type, "\n")] = 0;
-
-    if (!isValidAccountType(type)){
-        printf("Error: Invalid account type entered.\n");
+    if (!isValidAccountType(type)) {
+        printf("Error: Invalid account type.\n");
         PAUSE_DISPLAY();
         return;
     }
 
     printf("Enter initial balance (in dollars): $");
-    scanf("%lf", &balance);
-
-    if (scanf("%lf", &balance) != 1){
-        while (getchar() != '\n'); 
-        printf("Error: amount should not have letters.\n");
+    if (scanf("%lf", &balance) != 1) {
+        while (getchar() != '\n');
+        printf("Error: Balance must be a number.\n");
         PAUSE_DISPLAY();
         return;
     }
-
     getchar();
-
     if (balance < 0) {
-          printf("Error: Initial balance cannot be negative.\n");
-          PAUSE_DISPLAY();
-          return;
+        printf("Error: Initial balance cannot be negative.\n");
+        PAUSE_DISPLAY();
+        return;
     }
 
     const char *sql = "INSERT INTO accounts (user_id, user_name, account_id, date_created, country, phone, balance, type) "
-                      "VALUES (?, (SELECT name FROM users WHERE id = ?), "
-                      "(SELECT COALESCE(MAX(account_id), -1) + 1 FROM accounts WHERE user_id = ?), "
-                      "?, ?, ?, ?, ?);";
+                      "VALUES (?, (SELECT name FROM users WHERE id = ?), ?, ?, ?, ?, ?, ?);";
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
     if (rc != SQLITE_OK) {
-        CLEAR_SCREEN();
-        fprintf(stderr, "Failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        fprintf(stderr, "Database error: %s\n", sqlite3_errmsg(db));
         PAUSE_DISPLAY();
         return;
     }
-
     sqlite3_bind_int(stmt, 1, user_id);
     sqlite3_bind_int(stmt, 2, user_id);
-    sqlite3_bind_int(stmt, 3, user_id);
-    sqlite3_bind_text(stmt, 4, date_created, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 5, country, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 6, phone, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 3, account_id);
+    sqlite3_bind_text(stmt, 4, date_created, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 5, country, -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 6, phone, -1, SQLITE_TRANSIENT);
     sqlite3_bind_double(stmt, 7, balance);
-    sqlite3_bind_text(stmt, 8, type, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 8, type, -1, SQLITE_TRANSIENT);
 
-    rc = sqlite3_step(stmt);
-    if (rc == SQLITE_DONE) {
-        // Get the newly created account_id
-        const char *id_sql = "SELECT account_id FROM accounts WHERE user_id = ? ORDER BY account_id DESC LIMIT 1;";
-        rc = sqlite3_prepare_v2(db, id_sql, -1, &stmt, 0);
-        if (rc != SQLITE_OK) {
-            CLEAR_SCREEN();
-            fprintf(stderr, "Failed to retrieve account number: %s\n", sqlite3_errmsg(db));
-            PAUSE_DISPLAY();
-            sqlite3_finalize(stmt);
-            return;
-        }
-        sqlite3_bind_int(stmt, 1, user_id);
-        if (sqlite3_step(stmt) == SQLITE_ROW) {
-            new_account_id = sqlite3_column_int(stmt, 0);
-            CLEAR_SCREEN();
-            printf("Account created successfully!\n");
-            printf("Your new account number is: %d\n", new_account_id);
-            printf("Use this number for future operations or list accounts (option 5) to see all.\n");
-            PAUSE_DISPLAY();
-            PAUSE_DISPLAY();
-        } else {
-            CLEAR_SCREEN();
-            printf("Account created, but failed to retrieve account number.\n");
-            PAUSE_DISPLAY();
-        }
-    } else {
+    if (sqlite3_step(stmt) == SQLITE_DONE) {
         CLEAR_SCREEN();
-        fprintf(stderr, "Failed to create account: %s\n", sqlite3_errmsg(db));
+        printf("Account created successfully! Your new account number is: %d\n", account_id);
+        PAUSE_DISPLAY();
+    } else {
+        fprintf(stderr, "Error: %s\n", sqlite3_errmsg(db));
         PAUSE_DISPLAY();
     }
     sqlite3_finalize(stmt);
 }
-
 
 // check_account_details displays the details of the account
 void check_account_details(sqlite3 *db, int user_id) {
