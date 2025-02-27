@@ -1,6 +1,7 @@
 #include "db.h"
 #include <stdio.h>
 
+// init_database creates the tables if they don't exist
 int init_database(sqlite3 *db){
 
     char *err_msg = 0;
