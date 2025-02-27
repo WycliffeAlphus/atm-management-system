@@ -1,5 +1,7 @@
 #include "header.h"
 
+
+// account_menu displays the account menu
 void account_menu(sqlite3 *db, int user_id) {
     int choice;
 
