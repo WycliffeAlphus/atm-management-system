@@ -1,5 +1,5 @@
 #include "header.h"
-
+#include <math.h>
 // account_exists_and_owned checks if the account exists and is owned by the user
 static int account_exists_and_owned(sqlite3 *db, int user_id, int account_id) {
     sqlite3_stmt *stmt;
@@ -155,6 +155,14 @@ void create_account(sqlite3 *db, int user_id) {
     sqlite3_finalize(stmt);
 }
 
+// Function to calculate the future date
+void calculate_future_date(const char *original_date, int years_to_add, char *new_date) {
+    int day, month, year;
+    sscanf(original_date, "%d/%d/%d", &day, &month, &year);
+    year += years_to_add;
+    sprintf(new_date, "%02d/%02d/%d", day, month, year);
+}
+
 // check_account_details displays the details of the account
 void check_account_details(sqlite3 *db, int user_id) {
     int account_id;
@@ -198,7 +206,6 @@ void check_account_details(sqlite3 *db, int user_id) {
         double balance = sqlite3_column_double(stmt, 3);
         const char *type = (const char *)sqlite3_column_text(stmt, 4);
 
-        // Extract day from date_created (DD/MM/YYYY)
         int day;
         sscanf(date, "%d/", &day); 
 
@@ -214,14 +221,24 @@ void check_account_details(sqlite3 *db, int user_id) {
         if (strcmp(type, "current") == 0) {
             printf("You will not get interest because the account is of type current.\n");
         } else {
-            double rate = 0.0;
-            if (strcmp(type, "savings") == 0) rate = 0.07;
-            else if (strcmp(type, "fixed01") == 0) rate = 0.04;
-            else if (strcmp(type, "fixed02") == 0) rate = 0.05;
-            else if (strcmp(type, "fixed03") == 0) rate = 0.08;
-            if (rate > 0) {
-                double interest = balance * rate / 12;
+            double interest = 0.0;
+            char future_date[20];  // Buffer for the new date
+
+            if (strcmp(type, "savings") == 0) {
+                interest = balance * 0.07 / 12;  // Monthly interest for savings
                 printf("You will get $%.2f as interest on day %d of every month.\n", interest, day);
+            } else if (strcmp(type, "fixed01") == 0) {
+                interest = balance * 0.04;  // Annual interest for fixed01
+                calculate_future_date(date, 1, future_date);  // Add 1 year
+                printf("You will get $%.2f as interest on %s (1 year later).\n", interest, future_date);
+            } else if (strcmp(type, "fixed02") == 0) {
+                interest = balance * 0.05 * 2;  // Simple interest for fixed02
+                calculate_future_date(date, 2, future_date);  // Add 2 years
+                printf("You will get $%.2f as interest on %s (2 years later).\n", interest, future_date);
+            } else if (strcmp(type, "fixed03") == 0) {
+               interest = balance * 0.08 * 3;  // Simple interest for 3 years
+                calculate_future_date(date, 3, future_date);  // Add 3 years
+                printf("You will get $%.2f as interest on %s (3 years later).\n", interest, future_date);
             }
         }
 
@@ -408,7 +425,32 @@ void list_owned_accounts(sqlite3 *db, int user_id) {
 }
 
 
-// make_transaction makes a deposit or withdrawal
+
+// Utility functions for input and display
+int get_int_input(const char *prompt) {
+    int value;
+    printf("%s", prompt);
+    while (scanf("%d", &value) != 1) {
+        while (getchar() != '\n');
+        printf("Invalid input. Please enter a number.\n");
+        printf("%s", prompt);
+    }
+    getchar();  // Consume newline character
+    return value;
+}
+
+double get_double_input(const char *prompt) {
+    double value;
+    printf("%s", prompt);
+    while (scanf("%lf", &value) != 1 || value <= 0) {
+        while (getchar() != '\n');
+        printf("Invalid input. Please enter a positive number.\n");
+        printf("%s", prompt);
+    }
+    getchar();  // Consume newline character
+    return value;
+}
+
 void make_transaction(sqlite3 *db, int user_id) {
     int account_id, type_choice;
     double amount, current_balance;
@@ -417,15 +459,9 @@ void make_transaction(sqlite3 *db, int user_id) {
 
     CLEAR_SCREEN();
     printf("=== Make Transaction ===\n");
-    printf("Enter account number: ");
-    if (scanf("%d", &account_id) != 1) {
-        while (getchar() != '\n');
-        printf("Invalid account number. Please enter a number.\n");
-        PAUSE_DISPLAY();
-        return;
-    }
-    getchar();
+    account_id = get_int_input("Enter account number: ");
 
+    // Check if account exists and is owned by the user
     if (!account_exists_and_owned(db, user_id, account_id)) {
         CLEAR_SCREEN();
         printf("Account number %d not found or not owned by you.\n", account_id);
@@ -433,8 +469,8 @@ void make_transaction(sqlite3 *db, int user_id) {
         return;
     }
 
-    // Check account type and get current balance
-    const char *check_sql = "SELECT type, balance FROM accounts WHERE user_id = ? AND account_id = ?;";
+    // Check account type and balance immediately
+    const char *check_sql = "SELECT CAST(type AS TEXT), balance FROM accounts WHERE user_id = ? AND account_id = ?;";
     rc = sqlite3_prepare_v2(db, check_sql, -1, &stmt, 0);
     if (rc != SQLITE_OK) {
         CLEAR_SCREEN();
@@ -444,71 +480,65 @@ void make_transaction(sqlite3 *db, int user_id) {
     }
     sqlite3_bind_int(stmt, 1, user_id);
     sqlite3_bind_int(stmt, 2, account_id);
-    sqlite3_step(stmt);
-    const char *type = (const char *)sqlite3_column_text(stmt, 0);
-    current_balance = sqlite3_column_double(stmt, 1);
-    sqlite3_finalize(stmt);
 
-    if (strcmp(type, "fixed01") == 0 || strcmp(type, "fixed02") == 0 || strcmp(type, "fixed03") == 0) {
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_ROW) {  // Ensure we have a row
         CLEAR_SCREEN();
-        printf("Transactions are not allowed for fixed accounts (type: %s).\n", type);
+        printf("Account details not found.\n");
+        sqlite3_finalize(stmt);
+        PAUSE_DISPLAY();
+        return;
+    }
+
+    // Fetch and copy the account type safely
+    char type[20];  // Assuming the type will not exceed 19 characters + 1 for '\0'
+    strncpy(type, (const char *)sqlite3_column_text(stmt, 0), sizeof(type) - 1);
+    type[sizeof(type) - 1] = '\0';  // Ensure null termination
+    current_balance = sqlite3_column_double(stmt, 1);
+    sqlite3_finalize(stmt);  // Safe to finalize now
+
+    // Immediately show error if the account is fixed
+    if (strncmp(type, "fixed", 5) == 0) {  // Simplified type checking for fixed accounts
+        CLEAR_SCREEN();
+        printf("It is not possible to withdraw or deposit for fixed accounts (type: %s).\n", type);
         printf("\nPress Enter to return to the account menu...");
         fflush(stdout);
         getchar();
         return;
     }
 
+    // If not a fixed account, proceed with the transaction options
     printf("Select transaction type:\n");
     printf("1. Deposit\n");
     printf("2. Withdraw\n");
-    printf("Enter your choice: ");
-    if (scanf("%d", &type_choice) != 1) {
-        while (getchar() != '\n');
-        CLEAR_SCREEN();
-        printf("Invalid choice. Please enter a number.\n");
-        printf("\nPress Enter to return to the account menu...");
-        fflush(stdout);
-        getchar();
-        return;
-    }
-    getchar();
+    type_choice = get_int_input("Enter your choice: ");
 
-    printf("Enter amount (in dollars): $");
-    if (scanf("%lf", &amount) != 1 || amount <= 0) {
-        while (getchar() != '\n');
+    if (type_choice != 1 && type_choice != 2) {
         CLEAR_SCREEN();
-        printf("Invalid amount. Please enter a positive number.\n");
+        printf("Invalid choice. Please select 1 or 2.\n");
         printf("\nPress Enter to return to the account menu...");
         fflush(stdout);
         getchar();
         return;
     }
-    getchar();
+
+    amount = get_double_input("Enter amount (in dollars): $");
 
     // Check balance for withdrawal
-    if (type_choice == 2) { // Withdraw
-        if (amount > current_balance) {
-            CLEAR_SCREEN();
-            printf("Cannot withdraw $%.2f. The amount is higher than your current balance of $%.2f.\n", 
-                   amount, current_balance);
-            printf("\nPress Enter to return to the account menu...");
-            fflush(stdout);
-            getchar();
-            return;
-        }
+    if (type_choice == 2 && amount > current_balance) {  // Withdraw
+        CLEAR_SCREEN();
+        printf("Cannot withdraw $%.2f. The amount is higher than your current balance of $%.2f.\n",
+               amount, current_balance);
+        printf("\nPress Enter to return to the account menu...");
+        fflush(stdout);
+        getchar();
+        return;
     }
 
+    // Execute the transaction
     const char *sql = (type_choice == 1) ?
         "UPDATE accounts SET balance = balance + ? WHERE user_id = ? AND account_id = ?;" :
         "UPDATE accounts SET balance = balance - ? WHERE user_id = ? AND account_id = ?;";
-    if (type_choice != 1 && type_choice != 2) {
-        CLEAR_SCREEN();
-        printf("Invalid transaction type. Must be 1 or 2.\n");
-        printf("\nPress Enter to return to the account menu...");
-        fflush(stdout);
-        getchar();
-        return;
-    }
 
     rc = sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
     if (rc != SQLITE_OK) {
@@ -527,22 +557,24 @@ void make_transaction(sqlite3 *db, int user_id) {
     rc = sqlite3_step(stmt);
     if (rc == SQLITE_DONE) {
         CLEAR_SCREEN();
-        printf("%s of $%.2f %s successfully!\n", 
-               (type_choice == 1 ? "Deposit" : "Withdrawal"), amount, 
+        printf("%s of $%.2f %s successfully!\n",
+               (type_choice == 1 ? "Deposit" : "Withdrawal"), amount,
                (type_choice == 1 ? "added" : "withdrawn"));
-        printf("\nPress Enter to return to the account menu...");
-        fflush(stdout);
-        getchar();
     } else {
         CLEAR_SCREEN();
         fprintf(stderr, "Failed to process transaction: %s\n", sqlite3_errmsg(db));
-        printf("\nPress Enter to return to the account menu...");
-        fflush(stdout);
-        getchar();
     }
 
-    sqlite3_finalize(stmt);
+    if (sqlite3_finalize(stmt) != SQLITE_OK) {  // Check finalize status
+        fprintf(stderr, "Failed to finalize statement: %s\n", sqlite3_errmsg(db));
+    }
+
+    printf("\nPress Enter to return to the account menu...");
+    fflush(stdout);
+    getchar();
 }
+
+
 
 
 // transfer_ownership transfers the account to another user
