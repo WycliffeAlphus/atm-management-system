@@ -80,7 +80,7 @@ void create_account(sqlite3 *db, int user_id) {
     }
     sqlite3_finalize(stmt);
 
-    printf("Enter date created (dd/mm/yyyy): ");
+    printf("Enter date (dd/mm/yyyy): ");
     fgets(date_created, sizeof(date_created), stdin);
     date_created[strcspn(date_created, "\n")] = 0;
     if (!isValidDate(date_created)) {
@@ -90,6 +90,7 @@ void create_account(sqlite3 *db, int user_id) {
     }
 
     printf("Enter country: ");
+    while (getchar() != '\n'); 
     fgets(country, sizeof(country), stdin);
     country[strcspn(country, "\n")] = 0;
 
